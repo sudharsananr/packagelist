@@ -1,0 +1,31 @@
+{% set output = [] %}
+{% set output1 = [] %}
+{% set output2 = [] %}
+{% set pack_name= [] %}
+{% for data in exclude_var %}
+   {% for key, value in data.items() %}
+       {{ pack_name.append(value) }}
+   {% endfor %}
+{% endfor %}
+{% for result in yum_packages.results %}
+  {{ output.append( result.name ~ '-' ~ result.version ~ '-' ~ result.release ) }}
+{% endfor %}
+{% for var in (output | select('match', pack_name | join('|') )) %}{{output1.append(var)}} {% endfor %}
+{{ output2.append( '%s' | format(ansible_nodename)) }}
+{% for data1 in exclude_var %}
+   {% for key, value in data1.items() %}
+       {% if value in (output1 | list | join(',')) %}{{ output2.append(key+' is Installed') }}{% else %}{{ output2.append(key+' is Not Installed') }}{% endif %}
+   {% endfor %}
+{% endfor %}
+{% if vmtools_status.rc == 0  %}{{ output2.append('Vmtools is Installed') }}{% else %}{{ output2.append('Vmtools is Not Installed') }}{% endif %}
+{% for status in file_details.results  %}
+   {% if status.skipped is undefined %}
+       {% if status.stat.exists %}{{ output2.append(status.item.key+' is Installed') }}{% else %}{{ output2.append(status.item.key+' is Not Installed') }}{% endif %}
+   {% endif %}
+{% endfor %}
+{% for status in service_details.results  %}
+   {% if status.skipped is undefined %}
+      {% if status.rc == 0  %}{{ output2.append(status.item.key+' is Installed') }}{% else %}{{ output2.append(status.item.key+' is Not Installed') }}{% endif %}
+   {% endif %}
+{% endfor %}
+{{(output2)| list | join("\", \"")}}"
