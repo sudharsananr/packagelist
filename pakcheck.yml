@@ -1,0 +1,67 @@
+---
+- name: check for updates
+  hosts: all
+  become: true
+  become_user: root
+  gather_facts: false
+  vars:
+    exclude_var:
+      - Crowdstrike: "falcon"
+      - IBM Tivoli Monitoring: "TIV"
+      - Qualys agent: "qualys"
+      - IBM Tivoli Endpoint Manager: "BES"
+      - Trend Micro: "ds_agent"
+      - Flexnet (ManageSoft): "managesoft"
+    file_var:
+      - ITM_Agents: "/etc/init.d/ITMAgents1"
+      - Panorama: "/etc/init.d/panorama"
+    service_var:
+        - ITM_Agents: "ITMAgents1"
+        - Panorama: "appinternals"
+  pre_tasks:
+    - setup:
+        gather_subset: 'network'
+  tasks:
+    - name : delete file
+      file:
+        path: /tmp/Consolidated_Package_Check_output.csv
+        state: absent
+    - name: check for updates (yum)
+      yum:
+        list=installed
+      register: yum_packages
+      when: ansible_distribution == "CentOS" or ansible_distribution == "RedHat"
+    - name: Ansible check if file exists
+      stat:
+        path={{ item.value }}
+      register: file_details
+      with_dict: "{{ file_var }}"
+      when:
+        - ansible_distribution == "CentOS" or ansible_distribution == "RedHat"
+        - ansible_distribution_major_version == "6"
+    - name: file status check
+      debug:
+        var: file_details
+    - name: Check if Service available
+      command: "systemctl status {{ item.value }}"
+      register: service_details
+      ignore_errors: yes
+      with_dict: "{{ service_var }}"
+      when:
+        - ansible_distribution == "CentOS" or ansible_distribution == "RedHat"
+        - ansible_distribution_major_version == "7"
+    - name: service status check
+      debug:
+        var: service_details
+    - name: Check if vmtools Installed
+      shell : "PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin && export PATH && vmtoolsd -v"
+      register: vmtools_status
+      ignore_errors: yes
+    - name: Get Output written to Local file
+      lineinfile:
+        path: "/tmp/Consolidated_Package_Check_output.csv"
+        line: "{{ (lookup('template', 'Package-check-update.j2') | trim ) }}"
+        state: present
+        create: yes
+        mode: 644
+        insertafter: EOF
